@@ -1,0 +1,52 @@
+{
+  "manifest_version": "0.3",
+  "name": "thermy",
+  "display_name": "Thermy Thermal Printer",
+  "version": "0.1.0",
+  "description": "Print text, images, and QR codes to mini Bluetooth thermal printers",
+  "author": {
+    "name": "tentje",
+    "url": "https://github.com/tentje"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "server/main.py",
+    "mcp_config": {
+      "command": "python",
+      "args": ["${__dirname}/server/main.py"],
+      "env": {
+        "THERMY_DEVICE": "${user_config.device_address}",
+        "PYTHONPATH": "${__dirname}/server/lib"
+      }
+    }
+  },
+  "tools": [
+    {"name": "scan", "description": "Scan for available Bluetooth thermal printers"},
+    {"name": "connect", "description": "Connect to a thermal printer"},
+    {"name": "disconnect", "description": "Disconnect from the printer"},
+    {"name": "print_text", "description": "Print text with font size, alignment, borders"},
+    {"name": "print_image", "description": "Print an image file (PNG, JPG)"},
+    {"name": "print_qr", "description": "Generate and print a QR code from text/URL"}
+  ],
+  "keywords": ["thermal", "printer", "bluetooth", "qr", "print"],
+  "license": "MIT",
+  "user_config": {
+    "device_address": {
+      "type": "string",
+      "title": "Printer Bluetooth Address",
+      "description": "Bluetooth address of your thermal printer (e.g. AA:BB:CC:DD:EE:FF). Leave empty to use scan tool.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux"],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tentje/thermy"
+  },
+  "homepage": "https://github.com/tentje/thermy"
+}

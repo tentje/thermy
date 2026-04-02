@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI & GitHub Release
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
 
 permissions:
   id-token: write
+  contents: write
 
 jobs:
   publish:
@@ -27,3 +28,15 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Build .mcpb bundle
+        run: bash build-mcpb.sh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            thermy.mcpb
+            dist/*.whl
+            dist/*.tar.gz
+          generate_release_notes: true
