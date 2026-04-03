@@ -32,7 +32,69 @@ The same models supported by the original projects:
 - **Bluetooth**: Built-in or USB Bluetooth adapter
 - **Thermal Printer**: One of the supported models
 
-## Installation
+## Quick Install (pip)
+
+```bash
+pip install thermy           # Core library + CLI
+pip install 'thermy[qr]'     # + QR code support
+pip install 'thermy[mcp]'    # + MCP server for AI agents
+pip install 'thermy[all]'    # Everything
+```
+
+After installing, the `thermy` command is available:
+
+```bash
+thermy --scan
+thermy --text "Hello" --device AA:BB:CC:DD:EE:FF
+thermy --qr "https://example.com" --device AA:BB:CC:DD:EE:FF
+```
+
+## AI Agent Integration (MCP Server)
+
+Thermy includes an MCP server so AI agents can print directly.
+
+### Claude Code
+
+```bash
+claude mcp add thermy -e THERMY_DEVICE=AA:BB:CC:DD:EE:FF -- python3 -m thermy_mcp
+```
+
+Then ask Claude: "print a QR code for https://example.com"
+
+### Claude Desktop / Cowork
+
+**Option A: One-click install**
+Download `thermy.mcpb` from [Releases](https://github.com/tentje/thermy/releases) and double-click to install.
+
+**Option B: Manual config**
+Edit your Claude Desktop config (Settings > Developer > Edit Config):
+
+```json
+{
+  "mcpServers": {
+    "thermy": {
+      "command": "python3",
+      "args": ["-m", "thermy_mcp"],
+      "env": {
+        "THERMY_DEVICE": "AA:BB:CC:DD:EE:FF"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `scan` | Discover nearby Bluetooth thermal printers |
+| `connect` | Connect to a printer (uses `THERMY_DEVICE` env var if set) |
+| `disconnect` | Disconnect from the printer |
+| `print_text` | Print text with font size, alignment, borders, invert |
+| `print_image` | Print an image file (PNG, JPG, etc.) |
+| `print_qr` | Generate and print a QR code from text/URL |
+
+## Manual Installation (from source)
 
 ### 1. System Dependencies
 
