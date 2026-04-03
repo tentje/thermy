@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "thermy",
   "display_name": "Thermy Thermal Printer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Print text, images, and QR codes to mini Bluetooth thermal printers",
   "author": {
     "name": "tentje",
