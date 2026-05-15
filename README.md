@@ -83,6 +83,20 @@ Edit your Claude Desktop config (Settings > Developer > Edit Config):
 }
 ```
 
+### MetaMCP / uvx
+
+Add a STDIO server in MetaMCP with:
+
+- **Command**: `uvx`
+- **Args**: `--from`, `thermy[mcp]`, `thermy-mcp`
+- **Env**: `THERMY_DEVICE` = `AA:BB:CC:DD:EE:FF`
+
+Or run directly from the command line:
+
+```bash
+uvx --from 'thermy[mcp]' thermy-mcp
+```
+
 ### Available MCP Tools
 
 | Tool | Description |

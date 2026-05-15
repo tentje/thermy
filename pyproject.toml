@@ -27,6 +27,7 @@ all = ["qrcode>=7.4", "mcp>=1.0.0"]
 
 [project.scripts]
 thermy = "thermy_cli:main_sync"
+thermy-mcp = "thermy_mcp:main"
 
 [project.urls]
 Homepage = "https://github.com/tentje/thermy"

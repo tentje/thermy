@@ -210,5 +210,9 @@ async def print_qr(
         _printer._msg = lambda msg: None
 
 
-if __name__ == "__main__":
+def main():
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()
