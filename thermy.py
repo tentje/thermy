@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 import asyncio
 import os
@@ -284,7 +284,7 @@ class ThermalPrinter:
         "M01", "PR07", "PR02",
         "GB01", "GB02", "GB03", "GB04",
         "LY01", "LY02", "LY03", "LY10",
-        "AI01", "GT01", "MX10"
+        "AI01", "GT01", "MX10", "MXW01"
     ]
 
     def __init__(self, on_message: Optional[Callable[[str], None]] = None):
