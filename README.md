@@ -51,7 +51,7 @@ thermy --qr "https://example.com" --device AA:BB:CC:DD:EE:FF
 
 ## AI Agent Integration (MCP Server)
 
-Thermy includes an MCP server so AI agents can print directly.
+Thermy includes an MCP server so AI agents can print directly. Replace `AA:BB:CC:DD:EE:FF` with your printer's Bluetooth address (find it with `thermy --scan`).
 
 ### Claude Code
 
@@ -88,7 +88,7 @@ Edit your Claude Desktop config (Settings > Developer > Edit Config):
 Add a STDIO server in MetaMCP with:
 
 - **Command**: `uvx`
-- **Args** (3 separate entries): `--from`  `thermy[mcp]`  `thermy-mcp`
+- **Args** (4 separate entries): `--from`  `thermy[all]`  `thermy-mcp`
 - **Env**: `THERMY_DEVICE` = `AA:BB:CC:DD:EE:FF`
 
 JSON config for import:
@@ -98,7 +98,7 @@ JSON config for import:
   "mcpServers": {
     "thermy": {
       "command": "uvx",
-      "args": ["--from", "thermy[mcp]", "thermy-mcp"],
+      "args": ["--from", "thermy[all]", "thermy-mcp"],
       "env": {
         "THERMY_DEVICE": "AA:BB:CC:DD:EE:FF"
       }
@@ -106,6 +106,8 @@ JSON config for import:
   }
 }
 ```
+
+> **Note**: Use `thermy[all]` (not `thermy[mcp]`) to include QR code support. If the cached environment is stale, add `--refresh` as the first arg.
 
 ### Available MCP Tools
 

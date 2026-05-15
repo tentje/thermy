@@ -34,7 +34,7 @@ Homepage = "https://github.com/tentje/thermy"
 Repository = "https://github.com/tentje/thermy"
 
 [tool.setuptools]
-py-modules = ["thermy", "thermy_cli", "thermy_mcp"]
+py-modules = ["thermy", "thermy_cli", "thermy_mcp", "mxw01"]
 
 [tool.setuptools.dynamic]
 version = {attr = "thermy.__version__"}

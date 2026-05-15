@@ -277,7 +277,7 @@ class ThermalPrinter:
         "0000AB00-0000-1000-8000-00805F9B34FB"
     ]
 
-    # Supported printer models (from thermal_printer.py)
+    # Supported printer models
     SUPPORTED_PRINTERS = [
         "XW001", "XW002", "XW003", "XW004", "XW005", "XW006", "XW007", "XW008", "XW009",
         "JX001", "JX002", "JX003", "JX004", "JX005", "JX006",
@@ -287,12 +287,17 @@ class ThermalPrinter:
         "AI01", "GT01", "MX10", "MXW01"
     ]
 
+    # MXW01 series uses a different protocol
+    MXW01_PRINTERS = ["MXW01"]
+
     def __init__(self, on_message: Optional[Callable[[str], None]] = None):
         self.client: Optional[BleakClient] = None
         self.write_characteristic = None
         self.printer: Optional[CatPrinter] = None
+        self._mxw01 = None  # MXW01Printer instance when applicable
         self.paper_width = 384  # Default paper width in pixels
         self._msg = on_message or (lambda msg: None)
+        self._printer_name = None
 
     async def scan_devices(self, timeout: int = 30) -> List[tuple]:
         """Scan for compatible thermal printers"""
@@ -319,11 +324,25 @@ class ThermalPrinter:
         except Exception as e:
             raise RuntimeError(f"Bluetooth scan error: {e}")
 
-    async def connect(self, device_address: str) -> bool:
+    def _is_mxw01(self) -> bool:
+        """Check if connected printer is an MXW01 series."""
+        if self._printer_name:
+            return any(m in self._printer_name for m in self.MXW01_PRINTERS)
+        # Also detect by checking for AE03 characteristic (data write)
+        if self.client:
+            try:
+                char = self.client.services.get_characteristic("0000ae03-0000-1000-8000-00805f9b34fb")
+                return char is not None
+            except Exception:
+                pass
+        return False
+
+    async def connect(self, device_address: str, printer_name: str = None) -> bool:
         """Connect to thermal printer"""
         if not BLEAK_AVAILABLE:
             raise RuntimeError("Bluetooth support not available.")
 
+        self._printer_name = printer_name
         self._msg(f"Connecting to {device_address}...")
 
         try:
@@ -332,10 +351,20 @@ class ThermalPrinter:
 
             if self.client.is_connected:
                 self._msg(f"Connected to printer at {device_address}")
-                await self._find_write_characteristic()
 
-                # Initialize CatPrinter with write function
-                self.printer = CatPrinter("GB01", self._write_to_characteristic)
+                if self._is_mxw01():
+                    # MXW01 protocol
+                    from mxw01 import MXW01Printer
+                    self._mxw01 = MXW01Printer(self.client, msg=self._msg)
+                    await self._mxw01.setup()
+                    self.printer = None  # Not using CatPrinter
+                    self._msg("Using MXW01 protocol")
+                else:
+                    # CatPrinter protocol
+                    await self._find_write_characteristic()
+                    self.printer = CatPrinter("GB01", self._write_to_characteristic)
+                    self._mxw01 = None
+                    self._msg("Using CatPrinter protocol")
                 return True
             else:
                 raise ConnectionError(f"Failed to connect to {device_address}")
@@ -390,6 +419,9 @@ class ThermalPrinter:
 
     async def disconnect(self):
         """Disconnect from printer"""
+        if self._mxw01:
+            await self._mxw01.teardown()
+            self._mxw01 = None
         if self.client and self.client.is_connected:
             await self.client.disconnect()
             self._msg("Disconnected from printer")
@@ -709,9 +741,40 @@ class ThermalPrinter:
 
         return lines
 
+    def _image_to_mxw01_data(self, img: Image.Image) -> tuple:
+        """Convert an RGBA/RGB image to MXW01 bitmap bytes. Returns (data, height)."""
+        # Ensure paper width
+        if img.width != self.paper_width:
+            if img.width > self.paper_width:
+                img = img.resize((self.paper_width, int(img.height * self.paper_width / img.width)))
+            else:
+                padded = Image.new("RGB", (self.paper_width, img.height), (255, 255, 255))
+                padded.paste(img.convert("RGB"), ((self.paper_width - img.width) // 2, 0))
+                img = padded
+        # Convert to 1-bit using dithering (matches MXW01 reference: set bit = black)
+        img_bw = img.convert('1')
+        pixels = list(img_bw.getdata())
+        width, height = img_bw.size
+        data = bytearray()
+        for y in range(height):
+            byte = 0
+            for x in range(width):
+                if pixels[y * width + x] == 0:  # Black pixel — set the bit
+                    byte |= (1 << (x % 8))
+                if (x + 1) % 8 == 0 or (x + 1) == width:
+                    data.append(byte)
+                    byte = 0
+        return bytes(data), height
+
+    async def _print_via_mxw01(self, img: Image.Image) -> bool:
+        """Print an image via MXW01 protocol."""
+        data, height = self._image_to_mxw01_data(img)
+        await self._mxw01.print_bitmap(data, height)
+        return True
+
     async def print_text(self, text: str, font_size: int = 16, speed: int = 35, energy: int = 8000, align: str = 'center', invert: bool = False, border: int = 0) -> bool:
         """Print text content"""
-        if not self.printer:
+        if not self.printer and not self._mxw01:
             raise RuntimeError("Printer not connected")
 
         # Handle escaped newlines from command line
@@ -721,48 +784,52 @@ class ThermalPrinter:
         self._msg("Converting text to bitmap...")
         bitmap = self.text_to_bitmap(text, font_size, align, invert, border)
 
-        self._msg("Converting bitmap to print data...")
-        lines = self.bitmap_to_print_data(bitmap, is_image=False)  # Text mode
+        if self._mxw01:
+            await self._print_via_mxw01(bitmap)
+        else:
+            self._msg("Converting bitmap to print data...")
+            lines = self.bitmap_to_print_data(bitmap, is_image=False)
 
-        self._msg("Preparing printer...")
-        await self.printer.prepare(speed, energy)
+            self._msg("Preparing printer...")
+            await self.printer.prepare(speed, energy)
 
-        self._msg(f"Sending {len(lines)} lines to printer...")
-        for i, line in enumerate(lines):
-            await self.printer.draw(line)
+            self._msg(f"Sending {len(lines)} lines to printer...")
+            for i, line in enumerate(lines):
+                await self.printer.draw(line)
+                if i % 50 == 0:
+                    self._msg(f"Progress: {i+1}/{len(lines)}")
 
-            if i % 50 == 0:  # Progress indicator
-                self._msg(f"Progress: {i+1}/{len(lines)}")
-
-        self._msg("Finishing print job...")
-        await self.printer.finish(50)  # Feed some extra paper
+            self._msg("Finishing print job...")
+            await self.printer.finish(50)
 
         self._msg("Text printed successfully!")
         return True
 
     async def print_image(self, image_path: str, speed: int = 45, energy: int = 8000) -> bool:
         """Print image file"""
-        if not self.printer:
+        if not self.printer and not self._mxw01:
             raise RuntimeError("Printer not connected")
 
         self._msg(f"Loading image: {image_path}")
         bitmap = self.image_to_bitmap(image_path)
 
-        self._msg("Converting bitmap to print data...")
-        lines = self.bitmap_to_print_data(bitmap, is_image=True)  # Image mode
+        if self._mxw01:
+            await self._print_via_mxw01(bitmap)
+        else:
+            self._msg("Converting bitmap to print data...")
+            lines = self.bitmap_to_print_data(bitmap, is_image=True)
 
-        self._msg("Preparing printer...")
-        await self.printer.prepare(speed, energy)
+            self._msg("Preparing printer...")
+            await self.printer.prepare(speed, energy)
 
-        self._msg(f"Sending {len(lines)} lines to printer...")
-        for i, line in enumerate(lines):
-            await self.printer.draw(line)
+            self._msg(f"Sending {len(lines)} lines to printer...")
+            for i, line in enumerate(lines):
+                await self.printer.draw(line)
+                if i % 50 == 0:
+                    self._msg(f"Progress: {i+1}/{len(lines)}")
 
-            if i % 50 == 0:  # Progress indicator
-                self._msg(f"Progress: {i+1}/{len(lines)}")
-
-        self._msg("Finishing print job...")
-        await self.printer.finish(50)  # Feed some extra paper
+            self._msg("Finishing print job...")
+            await self.printer.finish(50)
 
         self._msg("Image printed successfully!")
         return True
@@ -798,26 +865,29 @@ class ThermalPrinter:
 
     async def print_qr(self, data: str, speed: int = 45, energy: int = 8000) -> bool:
         """Generate and print a QR code"""
-        if not self.printer:
+        if not self.printer and not self._mxw01:
             raise RuntimeError("Printer not connected")
 
         self._msg(f"Generating QR code for: {data}")
         bitmap = self.generate_qr(data)
 
-        self._msg("Converting QR code to print data...")
-        lines = self.bitmap_to_print_data(bitmap, is_image=True)
+        if self._mxw01:
+            await self._print_via_mxw01(bitmap)
+        else:
+            self._msg("Converting QR code to print data...")
+            lines = self.bitmap_to_print_data(bitmap, is_image=True)
 
-        self._msg("Preparing printer...")
-        await self.printer.prepare(speed, energy)
+            self._msg("Preparing printer...")
+            await self.printer.prepare(speed, energy)
 
-        self._msg(f"Sending {len(lines)} lines to printer...")
-        for i, line in enumerate(lines):
-            await self.printer.draw(line)
-            if i % 50 == 0:
-                self._msg(f"Progress: {i+1}/{len(lines)}")
+            self._msg(f"Sending {len(lines)} lines to printer...")
+            for i, line in enumerate(lines):
+                await self.printer.draw(line)
+                if i % 50 == 0:
+                    self._msg(f"Progress: {i+1}/{len(lines)}")
 
-        self._msg("Finishing print job...")
-        await self.printer.finish(50)
+            self._msg("Finishing print job...")
+            await self.printer.finish(50)
 
         self._msg("QR code printed successfully!")
         return True
