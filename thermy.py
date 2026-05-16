@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 import asyncio
 import os
@@ -298,6 +298,7 @@ class ThermalPrinter:
         self.paper_width = 384  # Default paper width in pixels
         self._msg = on_message or (lambda msg: None)
         self._printer_name = None
+        self._ble_devices = {}  # address -> BLEDevice object cache
 
     async def scan_devices(self, timeout: int = 30) -> List[tuple]:
         """Scan for compatible thermal printers"""
@@ -313,6 +314,7 @@ class ThermalPrinter:
             for device in devices:
                 if device.name and any(printer in device.name for printer in self.SUPPORTED_PRINTERS):
                     compatible_devices.append((device.name, device.address))
+                    self._ble_devices[device.address] = device
                     self._msg(f"Found compatible printer: {device.name} ({device.address})")
 
             if not compatible_devices:
@@ -346,7 +348,19 @@ class ThermalPrinter:
                         self._printer_name = model
                         break
 
-            self.client = BleakClient(device_address, timeout=10)
+            # Use cached BLEDevice if available, otherwise scan to find it
+            ble_device = self._ble_devices.get(device_address)
+            if not ble_device:
+                self._msg("Scanning for device...")
+                devices = await BleakScanner.discover(timeout=5)
+                for d in devices:
+                    if d.address == device_address:
+                        ble_device = d
+                        if not self._printer_name and d.name:
+                            self._printer_name = d.name
+                        break
+
+            self.client = BleakClient(ble_device or device_address, timeout=10)
             await self.client.connect()
 
             if self.client.is_connected:
