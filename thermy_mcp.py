@@ -13,8 +13,12 @@ from mcp.server.fastmcp import FastMCP
 
 from thermy import ThermalPrinter, check_requirements, __version__
 
-logging.basicConfig(level=logging.DEBUG, stream=sys.stderr, format="[thermy] %(message)s")
+logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
 logger = logging.getLogger("thermy")
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stderr)
+handler.setFormatter(logging.Formatter("[thermy] %(message)s"))
+logger.addHandler(handler)
 
 mcp = FastMCP("thermy")
 
