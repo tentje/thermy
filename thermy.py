@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 import asyncio
 import os
@@ -339,16 +339,12 @@ class ThermalPrinter:
         self._msg(f"Connecting to {device_address}...")
 
         try:
-            # Discover printer name if not provided
-            if not self._printer_name and BLEAK_AVAILABLE:
-                try:
-                    devices = await BleakScanner.discover(timeout=5)
-                    for d in devices:
-                        if d.address == device_address or (d.name and d.name == device_address):
-                            self._printer_name = d.name
-                            break
-                except Exception:
-                    pass
+            # Detect printer name from address if not provided
+            if not self._printer_name:
+                for model in self.SUPPORTED_PRINTERS:
+                    if model in device_address:
+                        self._printer_name = model
+                        break
 
             self.client = BleakClient(device_address, timeout=10)
             await self.client.connect()

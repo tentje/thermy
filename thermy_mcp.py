@@ -19,6 +19,7 @@ _printer = ThermalPrinter()
 _lock = asyncio.Lock()
 _idle_task: asyncio.Task | None = None
 _idle_timeout = 300  # 5 minutes
+_known_devices = {}  # address -> name mapping from scan results
 
 
 def _reset_idle_timer():
@@ -50,8 +51,9 @@ async def _ensure_connected(device_address: str | None = None) -> str:
             "No device address. Set THERMY_DEVICE environment variable "
             "or call the connect tool with a device_address."
         )
-    await _printer.connect(addr)
-    return f"connected to {addr}"
+    printer_name = _known_devices.get(addr)
+    await _printer.connect(addr, printer_name=printer_name)
+    return f"connected to {addr}" + (f" ({printer_name})" if printer_name else "")
 
 
 @mcp.tool()
@@ -66,6 +68,8 @@ async def scan(timeout: int = 30) -> dict:
     try:
         async with _lock:
             devices = await _printer.scan_devices(timeout=timeout)
+        for name, addr in devices:
+            _known_devices[addr] = name
         return {
             "success": True,
             "devices": [{"name": name, "address": addr} for name, addr in devices],
