@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.5.4"
+__version__ = "0.5.5"
 
 import asyncio
 import os
@@ -348,38 +348,31 @@ class ThermalPrinter:
                         self._printer_name = model
                         break
 
-            # Try direct connect first, fall back to scan+connect for BlueZ
-            self.client = BleakClient(device_address, timeout=20)
+            # Scan and connect in one step — connect immediately when device is found
+            self._msg("Scanning and connecting...")
+            ble_device = None
+            found_event = asyncio.Event()
+
+            def on_detected(device, adv_data):
+                nonlocal ble_device
+                if device.address == device_address:
+                    ble_device = device
+                    if not self._printer_name and device.name:
+                        self._printer_name = device.name
+                    found_event.set()
+
+            scanner = BleakScanner(detection_callback=on_detected)
+            await scanner.start()
             try:
-                await self.client.connect()
-            except Exception:
-                # BlueZ may need a fresh scan to populate its cache
-                self._msg("Direct connect failed, scanning for device...")
-                ble_device = None
-                found_event = asyncio.Event()
-
-                def on_detected(device, adv_data):
-                    nonlocal ble_device
-                    if device.address == device_address:
-                        ble_device = device
-                        if not self._printer_name and device.name:
-                            self._printer_name = device.name
-                        found_event.set()
-
-                scanner = BleakScanner(detection_callback=on_detected)
-                await scanner.start()
-                try:
-                    await asyncio.wait_for(found_event.wait(), timeout=30)
-                except asyncio.TimeoutError:
-                    pass
+                await asyncio.wait_for(found_event.wait(), timeout=30)
+            except asyncio.TimeoutError:
                 await scanner.stop()
+                raise ConnectionError(f"Device {device_address} not found")
+            await scanner.stop()
 
-                if not ble_device:
-                    raise ConnectionError(f"Device {device_address} not found")
-
-                self._msg(f"Found {ble_device.name}, connecting...")
-                self.client = BleakClient(ble_device, timeout=20)
-                await self.client.connect()
+            self._msg(f"Found {ble_device.name}, connecting immediately...")
+            self.client = BleakClient(ble_device, timeout=20)
+            await self.client.connect()
 
             if self.client.is_connected:
                 self._msg(f"Connected to printer at {device_address}")
