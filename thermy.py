@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 import asyncio
 import os
@@ -351,7 +351,7 @@ class ThermalPrinter:
             # Scan to get a fresh BLEDevice for BlueZ, then connect immediately
             self._msg("Scanning for device...")
             ble_device = None
-            scanner = BleakScanner()
+            found_event = asyncio.Event()
 
             def on_detected(device, adv_data):
                 nonlocal ble_device
@@ -359,15 +359,14 @@ class ThermalPrinter:
                     ble_device = device
                     if not self._printer_name and device.name:
                         self._printer_name = device.name
-                    scanner.register_detection_callback(None)
+                    found_event.set()
 
-            scanner.register_detection_callback(on_detected)
+            scanner = BleakScanner(detection_callback=on_detected)
             await scanner.start()
-            # Wait until device found or 10s timeout
-            for _ in range(100):
-                if ble_device:
-                    break
-                await asyncio.sleep(0.1)
+            try:
+                await asyncio.wait_for(found_event.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                pass
             await scanner.stop()
 
             if not ble_device:
