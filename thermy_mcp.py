@@ -72,14 +72,14 @@ async def version() -> dict:
 
 @mcp.tool()
 async def scan(timeout: int = 30) -> dict:
-    """Scan for available Bluetooth thermal printers nearby.
+    """Scan for available Bluetooth thermal printers nearby. Use at least 30 seconds timeout — BLE printers need time to advertise.
 
     Args:
-        timeout: Scan duration in seconds (default 30)
+        timeout: Scan duration in seconds (minimum 30, default 30)
     """
     try:
         async with _lock:
-            devices = await _printer.scan_devices(timeout=timeout)
+            devices = await _printer.scan_devices(timeout=max(timeout, 30))
         for name, addr in devices:
             _known_devices[addr] = name
         return {
