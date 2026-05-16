@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.4.4"
+__version__ = "0.4.5"
 
 import asyncio
 import os
@@ -350,15 +350,18 @@ class ThermalPrinter:
 
             # Use cached BLEDevice if available, otherwise scan to find it
             ble_device = self._ble_devices.get(device_address)
-            if not ble_device:
-                self._msg("Scanning for device...")
-                devices = await BleakScanner.discover(timeout=5)
+            if ble_device:
+                self._msg(f"Using cached BLEDevice for {device_address}")
+            else:
+                self._msg(f"Device not in cache ({len(self._ble_devices)} cached). Scanning...")
+                devices = await BleakScanner.discover(timeout=10)
+                self._msg(f"Scan found {len(devices)} devices")
                 for d in devices:
+                    self._msg(f"  {d.name or '(no name)'}: {d.address}")
                     if d.address == device_address:
                         ble_device = d
                         if not self._printer_name and d.name:
                             self._printer_name = d.name
-                        break
 
             self.client = BleakClient(ble_device or device_address, timeout=10)
             await self.client.connect()
