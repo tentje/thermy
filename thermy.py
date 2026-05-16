@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.5.3"
+__version__ = "0.5.4"
 
 import asyncio
 import os
@@ -348,12 +348,14 @@ class ThermalPrinter:
                         self._printer_name = model
                         break
 
-            # Use cached BLEDevice first (from scan_devices), fall back to fresh scan
-            ble_device = self._ble_devices.get(device_address)
-            if ble_device:
-                self._msg(f"Using cached device: {ble_device.name}")
-            else:
-                self._msg("Scanning for device...")
+            # Try direct connect first, fall back to scan+connect for BlueZ
+            self.client = BleakClient(device_address, timeout=20)
+            try:
+                await self.client.connect()
+            except Exception:
+                # BlueZ may need a fresh scan to populate its cache
+                self._msg("Direct connect failed, scanning for device...")
+                ble_device = None
                 found_event = asyncio.Event()
 
                 def on_detected(device, adv_data):
@@ -367,17 +369,17 @@ class ThermalPrinter:
                 scanner = BleakScanner(detection_callback=on_detected)
                 await scanner.start()
                 try:
-                    await asyncio.wait_for(found_event.wait(), timeout=10)
+                    await asyncio.wait_for(found_event.wait(), timeout=30)
                 except asyncio.TimeoutError:
                     pass
                 await scanner.stop()
 
-            if not ble_device:
-                raise ConnectionError(f"Device {device_address} not found in scan")
+                if not ble_device:
+                    raise ConnectionError(f"Device {device_address} not found")
 
-            self._msg(f"Connecting to {ble_device.name}...")
-            self.client = BleakClient(ble_device, timeout=20)
-            await self.client.connect()
+                self._msg(f"Found {ble_device.name}, connecting...")
+                self.client = BleakClient(ble_device, timeout=20)
+                await self.client.connect()
 
             if self.client.is_connected:
                 self._msg(f"Connected to printer at {device_address}")
