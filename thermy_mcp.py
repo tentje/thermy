@@ -5,6 +5,7 @@ Exposes thermal printer functionality as MCP tools for AI agents.
 """
 
 import asyncio
+import logging
 import os
 import sys
 
@@ -12,10 +13,13 @@ from mcp.server.fastmcp import FastMCP
 
 from thermy import ThermalPrinter, check_requirements, __version__
 
+logging.basicConfig(level=logging.DEBUG, stream=sys.stderr, format="[thermy] %(message)s")
+logger = logging.getLogger("thermy")
+
 mcp = FastMCP("thermy")
 
 # Module-level state
-_printer = ThermalPrinter()
+_printer = ThermalPrinter(on_message=lambda msg: logger.info(msg))
 _lock = asyncio.Lock()
 _idle_task: asyncio.Task | None = None
 _idle_timeout = 300  # 5 minutes
@@ -69,8 +73,6 @@ async def scan(timeout: int = 30) -> dict:
     Args:
         timeout: Scan duration in seconds (default 30)
     """
-    messages = []
-    _printer._msg = messages.append
     try:
         async with _lock:
             devices = await _printer.scan_devices(timeout=timeout)
@@ -79,12 +81,9 @@ async def scan(timeout: int = 30) -> dict:
         return {
             "success": True,
             "devices": [{"name": name, "address": addr} for name, addr in devices],
-            "output": "\n".join(messages),
         }
     except Exception as e:
-        return {"success": False, "error": str(e), "output": "\n".join(messages)}
-    finally:
-        _printer._msg = lambda msg: None
+        return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
@@ -94,32 +93,24 @@ async def connect(device_address: str | None = None) -> dict:
     Args:
         device_address: Bluetooth address (e.g. AA:BB:CC:DD:EE:FF). Uses THERMY_DEVICE env var if omitted.
     """
-    messages = []
-    _printer._msg = messages.append
     try:
         async with _lock:
             status = await _ensure_connected(device_address)
         _reset_idle_timer()
-        return {"success": True, "message": status, "output": "\n".join(messages)}
+        return {"success": True, "message": status}
     except Exception as e:
-        return {"success": False, "error": str(e), "output": "\n".join(messages)}
-    finally:
-        _printer._msg = lambda msg: None
+        return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
 async def disconnect() -> dict:
     """Disconnect from the thermal printer."""
-    messages = []
-    _printer._msg = messages.append
     try:
         async with _lock:
             await _printer.disconnect()
-        return {"success": True, "message": "disconnected", "output": "\n".join(messages)}
+        return {"success": True, "message": "disconnected"}
     except Exception as e:
-        return {"success": False, "error": str(e), "output": "\n".join(messages)}
-    finally:
-        _printer._msg = lambda msg: None
+        return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
@@ -145,19 +136,14 @@ async def print_text(
         energy: Thermal energy level (default 8000)
         device_address: Bluetooth address to auto-connect to if not connected
     """
-    messages = []
-    _printer._msg = messages.append
     try:
         async with _lock:
-            conn_status = await _ensure_connected(device_address)
-            messages.append(conn_status)
+            await _ensure_connected(device_address)
             await _printer.print_text(text, font_size, speed, energy, align, invert, border)
         _reset_idle_timer()
-        return {"success": True, "message": "Text printed successfully", "output": "\n".join(messages)}
+        return {"success": True, "message": "Text printed"}
     except Exception as e:
-        return {"success": False, "error": str(e), "output": "\n".join(messages)}
-    finally:
-        _printer._msg = lambda msg: None
+        return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
@@ -175,19 +161,14 @@ async def print_image(
         energy: Thermal energy level (default 8000)
         device_address: Bluetooth address to auto-connect to if not connected
     """
-    messages = []
-    _printer._msg = messages.append
     try:
         async with _lock:
-            conn_status = await _ensure_connected(device_address)
-            messages.append(conn_status)
+            await _ensure_connected(device_address)
             await _printer.print_image(image_path, speed, energy)
         _reset_idle_timer()
-        return {"success": True, "message": "Image printed successfully", "output": "\n".join(messages)}
+        return {"success": True, "message": "Image printed"}
     except Exception as e:
-        return {"success": False, "error": str(e), "output": "\n".join(messages)}
-    finally:
-        _printer._msg = lambda msg: None
+        return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
@@ -205,19 +186,14 @@ async def print_qr(
         energy: Thermal energy level (default 8000)
         device_address: Bluetooth address to auto-connect to if not connected
     """
-    messages = []
-    _printer._msg = messages.append
     try:
         async with _lock:
-            conn_status = await _ensure_connected(device_address)
-            messages.append(conn_status)
+            await _ensure_connected(device_address)
             await _printer.print_qr(data, speed, energy)
         _reset_idle_timer()
-        return {"success": True, "message": "QR code printed successfully", "output": "\n".join(messages)}
+        return {"success": True, "message": "QR code printed"}
     except Exception as e:
-        return {"success": False, "error": str(e), "output": "\n".join(messages)}
-    finally:
-        _printer._msg = lambda msg: None
+        return {"success": False, "error": str(e)}
 
 
 def main():
