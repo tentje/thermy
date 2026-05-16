@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.4.8"
+__version__ = "0.4.9"
 
 import asyncio
 import os
@@ -388,7 +388,10 @@ class ThermalPrinter:
         except ConnectionError:
             raise
         except Exception as e:
-            raise ConnectionError(f"Connection error: {e}")
+            self._msg(f"Connection error: {type(e).__name__}: {e}")
+            import traceback
+            self._msg(traceback.format_exc())
+            raise ConnectionError(f"Connection error: {type(e).__name__}: {e}")
 
     async def _find_write_characteristic(self):
         """Find the correct write characteristic"""
