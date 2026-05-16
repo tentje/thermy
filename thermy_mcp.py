@@ -10,7 +10,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from thermy import ThermalPrinter, check_requirements
+from thermy import ThermalPrinter, check_requirements, __version__
 
 mcp = FastMCP("thermy")
 
@@ -54,6 +54,12 @@ async def _ensure_connected(device_address: str | None = None) -> str:
     printer_name = _known_devices.get(addr)
     await _printer.connect(addr, printer_name=printer_name)
     return f"connected to {addr}" + (f" ({printer_name})" if printer_name else "")
+
+
+@mcp.tool()
+async def version() -> dict:
+    """Return the thermy version."""
+    return {"version": __version__}
 
 
 @mcp.tool()

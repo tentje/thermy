@@ -4,7 +4,7 @@ Thermal Printer Library
 Core library for Mini Bluetooth Thermal Printers
 """
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 
 import asyncio
 import os
